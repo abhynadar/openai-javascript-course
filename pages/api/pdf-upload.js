@@ -11,12 +11,60 @@ export default async function handler(req, res) {
     console.log("Inside the PDF handler");
     // Enter your code here
     /** STEP ONE: LOAD DOCUMENT */
+    const bookPath = "/Users/abhynadar/Documents/work-2023/openai-javascript-course/data/document_loaders/naval-ravikant-book.pdf";
+    const loader = new PDFLoader(bookPath);
+
+    const docs = await loader.load();
+
+    console.log({ docs });
+
+    if (docs.length == 0) {
+      console.log("No docs found");
+      return;
+    }
 
     // Chunk it
 
+
+    const splitter = new CharacterTextSplitter({
+      separator: " ",
+      chunkSize: 250,
+      chunkOverlap: 10,
+    });
+
+    const splitDocs = await splitter.splitDocuments(docs);
+
     // Reduce the size of the metadata
 
+    const reducedDocs = splitDocs.map((doc) => {
+      const reducedMetadata = { ...doc.metadata };
+      delete reducedMetadata.pdf;
+      return new Document({
+        pageContent: doc.pageContent,
+        metadata: reducedMetadata,
+      });
+    });
+
+    console.log(reducedDocs[0]);
+    console.log(splitDocs.length);
+
+
     /** STEP TWO: UPLOAD TO DATABASE */
+    const client = new PineconeClient();
+
+    await client.init({
+      apiKey: process.env.PINECONE_API_KEY,
+      environment: process.env.PINECONE_ENVIRONMENT,
+    });
+
+    const pineconeIndex = client.Index(process.env.PINECONE_INDEX);
+
+    await PineconeStore.fromDocuments(reducedDocs, new OpenAIEmbeddings(), {
+      pineconeIndex,
+    });
+
+
+
 
     // upload documents to Pinecone
     return res.status(200).json({ result: docs });
